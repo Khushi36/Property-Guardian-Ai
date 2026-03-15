@@ -7,6 +7,8 @@ Property Guardian AI is an advanced, AI-powered system designed to secure proper
 - **Deep Security Audit**: Automatically detects "Broken Chain of Title" and "Double Selling" anomalies using advanced SQL window functions.
 - **AI-Powered Querying**: Consult with an AI assistant about property regulations and transaction history using natural language.
 - **Smart Ingestion**: Upload property deeds (PDF) and automatically extract and index ownership data.
+- **Voice Interaction**: Ask questions using your voice with integrated Speech-to-Text (STT).
+- **Multilingual Support**: Freely query the system in English, Hindi, Marathi, and other supported languages.
 - **Fraud Analytics**: Visualize high-risk properties and transaction patterns in real-time.
 
 ## 🛠️ Tech Stack
@@ -16,7 +18,7 @@ Property Guardian AI is an advanced, AI-powered system designed to secure proper
 - **Database**: 
   - **PostgreSQL**: Stores structured property and transaction records.
   - **ChromaDB**: Handles vector embeddings for semantic document search.
-- **AI Engine**: Advanced LLM models (via OpenRouter/NVIDIA) for intelligent data extraction and querying.
+- **AI Engine**: Advanced LLM models (via OpenRouter) for intelligent data extraction and querying.
 - **Infrastructure**: Docker & Docker Compose for seamless deployment.
 
 ## 📋 Prerequisites
