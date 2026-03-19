@@ -7,3 +7,25 @@ data/
 dist/
 build/
 .venv/
+
+# OS generated files #
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs #
+.idea/
+.vscode/
+
+# Testing and Coverage #
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Database / Export files #
+*.sql
+*.sqlite3

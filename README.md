@@ -36,13 +36,29 @@ cd property-guardian-ai
 ```
 
 ### 2. Configure Environment
-Create a `.env` file in the root directory:
+
+1. Copy the example environment file to create your own configuration:
+   ```bash
+   cp .env.example .env
+   ```
+   *(On Windows Command Prompt, use `copy .env.example .env` or rename the file manually)*
+
+2. Open the `.env` file and configure your variables. 
+   
+   **Important: Generating a `SECRET_KEY`**
+   The application requires a secure random string for the `SECRET_KEY` to sign login tokens safely. Generate one by running this command in your terminal:
+   ```bash
+   python -c "import secrets; print(secrets.token_hex(32))"
+   ```
+   Copy the output and paste it into your `.env` file next to `SECRET_KEY=`.
+
+Example `.env` configuration:
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/property_db
 OPENROUTER_API_KEY=your_openrouter_key_here
 LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_MODEL=arcee-ai/trinity-large-preview:free
-SECRET_KEY=your_secret_key_here
+SECRET_KEY=paste_your_generated_random_string_here
 ```
 
 ### 3. Install Dependencies
