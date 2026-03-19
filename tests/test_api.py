@@ -2,21 +2,21 @@
 Tests for the Property Guardian AI FastAPI application.
 Uses FastAPI TestClient with a test database override.
 """
+
+import pytest
 from fastapi.testclient import TestClient
-from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import pytest
 
 from app.core.database import Base, get_db
-from app.api.endpoints import router
 from main import app as main_app
-
 
 # --- Test Database Setup ---
 # Use SQLite in-memory for fast tests (no Postgres dependency)
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -56,10 +56,10 @@ def test_health_check():
 # --- Registration Tests ---
 def test_register_user():
     """POST /api/v1/users/ should create a new user."""
-    response = client.post("/api/v1/users/", json={
-        "email": "test@example.com",
-        "password": "securepassword123"
-    })
+    response = client.post(
+        "/api/v1/users/",
+        json={"email": "test@example.com", "password": "securepassword123"},
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == "test@example.com"
@@ -78,8 +78,12 @@ def test_register_duplicate_user():
 # --- Login Tests ---
 def test_login_success():
     """Login with correct credentials should return a JWT token."""
-    client.post("/api/v1/users/", json={"email": "login@example.com", "password": "pass123"})
-    response = client.post("/api/v1/token", data={"username": "login@example.com", "password": "pass123"})
+    client.post(
+        "/api/v1/users/", json={"email": "login@example.com", "password": "pass123"}
+    )
+    response = client.post(
+        "/api/v1/token", data={"username": "login@example.com", "password": "pass123"}
+    )
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
@@ -88,14 +92,20 @@ def test_login_success():
 
 def test_login_wrong_password():
     """Login with wrong password should return 401."""
-    client.post("/api/v1/users/", json={"email": "wrong@example.com", "password": "correct"})
-    response = client.post("/api/v1/token", data={"username": "wrong@example.com", "password": "incorrect"})
+    client.post(
+        "/api/v1/users/", json={"email": "wrong@example.com", "password": "correct"}
+    )
+    response = client.post(
+        "/api/v1/token", data={"username": "wrong@example.com", "password": "incorrect"}
+    )
     assert response.status_code == 401
 
 
 def test_login_nonexistent_user():
     """Login with non-existent user should return 401."""
-    response = client.post("/api/v1/token", data={"username": "ghost@example.com", "password": "anything"})
+    response = client.post(
+        "/api/v1/token", data={"username": "ghost@example.com", "password": "anything"}
+    )
     assert response.status_code == 401
 
 
@@ -109,11 +119,17 @@ def test_protected_endpoint_without_token():
 def test_protected_endpoint_with_token():
     """Accessing fraud-check with valid token should succeed."""
     # Register + Login
-    client.post("/api/v1/users/", json={"email": "auth@example.com", "password": "pass123"})
-    login_resp = client.post("/api/v1/token", data={"username": "auth@example.com", "password": "pass123"})
+    client.post(
+        "/api/v1/users/", json={"email": "auth@example.com", "password": "pass123"}
+    )
+    login_resp = client.post(
+        "/api/v1/token", data={"username": "auth@example.com", "password": "pass123"}
+    )
     token = login_resp.json()["access_token"]
 
-    response = client.get("/api/v1/fraud-check", headers={"Authorization": f"Bearer {token}"})
+    response = client.get(
+        "/api/v1/fraud-check", headers={"Authorization": f"Bearer {token}"}
+    )
     assert response.status_code == 200
 
 

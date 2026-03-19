@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 from app.core.config import settings
 
 # Create the SQLAlchemy engine with connection pooling
@@ -14,7 +15,10 @@ engine = create_engine(
 
 # Implementation of read-only engine
 from sqlalchemy import make_url
-readonly_url = make_url(settings.DATABASE_URL).set(username="read_only_user", password="readonly_password")
+
+readonly_url = make_url(settings.DATABASE_URL).set(
+    username="read_only_user", password="readonly_password"
+)
 readonly_engine = create_engine(
     readonly_url,
     pool_size=5,
@@ -29,6 +33,7 @@ SessionReadOnly = sessionmaker(autocommit=False, autoflush=False, bind=readonly_
 
 Base = declarative_base()
 
+
 # Dependency
 def get_db():
     db = SessionLocal()
@@ -36,6 +41,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 def get_readonly_db():
     db = SessionReadOnly()

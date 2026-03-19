@@ -1,5 +1,7 @@
-import requests
 import os
+
+import requests
+
 
 class PropertyGuardianClient:
     def __init__(self, base_url=None):
@@ -14,14 +16,21 @@ class PropertyGuardianClient:
             resp = requests.post(
                 f"{self.api_v1}/token",
                 data={"username": email, "password": password},
-                timeout=10
+                timeout=10,
             )
             if resp.status_code == 200:
                 self._token = resp.json()["access_token"]
                 self.headers = {"Authorization": f"Bearer {self._token}"}
-                return {"status": "success", "message": "Logged in successfully.", "token": self._token}
+                return {
+                    "status": "success",
+                    "message": "Logged in successfully.",
+                    "token": self._token,
+                }
             else:
-                return {"status": "error", "message": resp.json().get("detail", "Login failed.")}
+                return {
+                    "status": "error",
+                    "message": resp.json().get("detail", "Login failed."),
+                }
         except requests.RequestException as e:
             return {"status": "error", "message": str(e)}
 
@@ -36,28 +45,38 @@ class PropertyGuardianClient:
             resp = requests.post(
                 f"{self.api_v1}/users/",
                 json={"email": email, "password": password},
-                timeout=10
+                timeout=10,
             )
             if resp.status_code == 200:
-                return {"status": "success", "message": "Account created. You can now log in."}
+                return {
+                    "status": "success",
+                    "message": "Account created. You can now log in.",
+                }
             else:
-                return {"status": "error", "message": resp.json().get("detail", "Registration failed.")}
+                return {
+                    "status": "error",
+                    "message": resp.json().get("detail", "Registration failed."),
+                }
         except requests.RequestException as e:
             return {"status": "error", "message": str(e)}
-
-
 
     def confirm_password_reset(self, email: str, new_password: str) -> dict:
         """Set new password without OTP."""
         try:
             resp = requests.post(
-                f"{self.api_v1}/password-reset/confirm", 
-                json={"email": email, "new_password": new_password}, 
-                timeout=10
+                f"{self.api_v1}/password-reset/confirm",
+                json={"email": email, "new_password": new_password},
+                timeout=10,
             )
             if resp.status_code == 200:
-                return {"status": "success", "message": resp.json().get("message", "Password reset")}
-            return {"status": "error", "message": resp.json().get("detail", "Failed to reset password")}
+                return {
+                    "status": "success",
+                    "message": resp.json().get("message", "Password reset"),
+                }
+            return {
+                "status": "error",
+                "message": resp.json().get("detail", "Failed to reset password"),
+            }
         except requests.RequestException as e:
             return {"status": "error", "message": str(e)}
 
@@ -76,21 +95,32 @@ class PropertyGuardianClient:
     def ingest_files(self, files):
         """Upload multiple files to the ingestion endpoint."""
         if not self.is_authenticated:
-            return {"status": "error", "message": "Not authenticated. Please log in first."}
-            
+            return {
+                "status": "error",
+                "message": "Not authenticated. Please log in first.",
+            }
+
         upload_data = []
         for file in files:
-            file.seek(0) 
-            upload_data.append(('files', (file.name, file, file.type)))
-        
+            file.seek(0)
+            upload_data.append(("files", (file.name, file, file.type)))
+
         try:
-            resp = requests.post(f"{self.api_v1}/ingest", files=upload_data, headers=self.headers, timeout=120)
-            
+            resp = requests.post(
+                f"{self.api_v1}/ingest",
+                files=upload_data,
+                headers=self.headers,
+                timeout=120,
+            )
+
             if resp.status_code == 401:
                 self._token = None
                 self.headers = {}
-                return {"status": "error", "message": "Session expired. Please log in again."}
-                
+                return {
+                    "status": "error",
+                    "message": "Session expired. Please log in again.",
+                }
+
             return resp.json()
         except requests.RequestException as e:
             return {"status": "error", "message": str(e)}
@@ -100,7 +130,9 @@ class PropertyGuardianClient:
         if not self.is_authenticated:
             return []
         try:
-            resp = requests.get(f"{self.api_v1}/fraud-check", headers=self.headers, timeout=30)
+            resp = requests.get(
+                f"{self.api_v1}/fraud-check", headers=self.headers, timeout=30
+            )
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as e:
@@ -110,7 +142,9 @@ class PropertyGuardianClient:
     def get_properties(self):
         """Fetch all properties from the database."""
         try:
-            resp = requests.get(f"{self.api_v1}/properties", headers=self.headers, timeout=10)
+            resp = requests.get(
+                f"{self.api_v1}/properties", headers=self.headers, timeout=10
+            )
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException:
@@ -119,7 +153,9 @@ class PropertyGuardianClient:
     def get_transactions(self):
         """Fetch all transactions from the database."""
         try:
-            resp = requests.get(f"{self.api_v1}/transactions", headers=self.headers, timeout=10)
+            resp = requests.get(
+                f"{self.api_v1}/transactions", headers=self.headers, timeout=10
+            )
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException:
@@ -131,15 +167,16 @@ class PropertyGuardianClient:
             params = {"q": query}
             if session_id:
                 params["session_id"] = session_id
-            resp = requests.get(f"{self.api_v1}/query/natural_language", params=params, headers=self.headers, timeout=120)
+            resp = requests.get(
+                f"{self.api_v1}/query/natural_language",
+                params=params,
+                headers=self.headers,
+                timeout=120,
+            )
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as e:
-            return {
-                "answer": f"Backend Error: {e}",
-                "sources": [],
-                "error": str(e)
-            }
+            return {"answer": f"Backend Error: {e}", "sources": [], "error": str(e)}
 
     def execute_sql(self, query: str):
         """Execute a raw SQL SELECT query via POST."""
@@ -150,14 +187,15 @@ class PropertyGuardianClient:
                 f"{self.api_v1}/query/direct_sql",
                 json={"query": query},
                 headers=self.headers,
-                timeout=30
+                timeout=30,
             )
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException as e:
             detail = str(e)
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 try:
                     detail = e.response.json().get("detail", str(e))
-                except: pass
+                except:
+                    pass
             return {"status": "error", "message": detail}

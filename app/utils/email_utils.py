@@ -1,10 +1,12 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from app.core.config import settings
 import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
 
 def send_email(to_email: str, subject: str, body: str) -> bool:
     """
@@ -13,15 +15,17 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
     Requires SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL to be configured in .env.
     """
     if not settings.SMTP_SERVER or not settings.SMTP_USERNAME:
-        logger.warning("Email not configured: SMTP_SERVER or SMTP_USERNAME is empty. Skipping send.")
+        logger.warning(
+            "Email not configured: SMTP_SERVER or SMTP_USERNAME is empty. Skipping send."
+        )
         return False
 
     try:
         msg = MIMEMultipart()
-        msg['From'] = settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'html'))
+        msg["From"] = settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "html"))
 
         with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
             server.starttls()

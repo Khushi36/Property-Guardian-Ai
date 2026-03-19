@@ -1,15 +1,19 @@
-import streamlit as st
-import pandas as pd
-from app.client import PropertyGuardianClient
-from streamlit_mic_recorder import speech_to_text
-import extra_streamlit_components as stx
 import json
+
+import extra_streamlit_components as stx
+import pandas as pd
+import streamlit as st
+from streamlit_mic_recorder import speech_to_text
+
+from app.client import PropertyGuardianClient
+
 
 # --- Cookie Manager ---
 def get_cookie_manager():
     if "cookie_manager" not in st.session_state:
         st.session_state.cookie_manager = stx.CookieManager()
     return st.session_state.cookie_manager
+
 
 cookie_manager = get_cookie_manager()
 
@@ -21,16 +25,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
 # --- Initialize Client (per session to avoid JWT token collision across users) ---
 def get_client():
     if "client" not in st.session_state:
         st.session_state.client = PropertyGuardianClient()
     return st.session_state.client
 
+
 client = get_client()
 
 # --- CSS Overrides ---
-st.markdown("""
+st.markdown(
+    """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Georgia:italic&display=swap');
     
@@ -261,7 +268,9 @@ st.markdown("""
     header {visibility: hidden;}
 </style>
 
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # --- State Management ---
 # --- State Management ---
@@ -273,6 +282,7 @@ if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 if "chat_session_id" not in st.session_state:
     import uuid
+
     st.session_state.chat_session_id = str(uuid.uuid4())
 
 # --- Cookie Check (Survival across refresh) ---
@@ -296,15 +306,17 @@ if not st.session_state.authenticated:
     with col2:
         st.markdown("## ✨ Property Guardian AI")
         st.markdown("Please log in or register to continue.")
-        
+
         tab_login, tab_register = st.tabs(["Login", "Register"])
-        
+
         with tab_login:
             with st.form("login_form"):
                 email = st.text_input("Email", placeholder="you@example.com")
                 password = st.text_input("Password", type="password")
-                submitted = st.form_submit_button("Log In", type="primary", use_container_width=True)
-                
+                submitted = st.form_submit_button(
+                    "Log In", type="primary", use_container_width=True
+                )
+
                 if submitted:
                     if not email or not password:
                         st.error("Please fill in both fields.")
@@ -313,28 +325,42 @@ if not st.session_state.authenticated:
                         if result["status"] == "success":
                             st.session_state.authenticated = True
                             st.session_state.user_email = email
-                            
+
                             # Set tokens in a single JSON cookie to avoid key conflicts
-                            token = result.get("token") or st.session_state.client._token
+                            token = (
+                                result.get("token") or st.session_state.client._token
+                            )
                             session_json = json.dumps({"token": token, "email": email})
-                            cookie_manager.set("property_guardian_session", session_json, expires_at=None)
-                            
+                            cookie_manager.set(
+                                "property_guardian_session",
+                                session_json,
+                                expires_at=None,
+                            )
+
                             st.session_state.messages = []
                             st.rerun()
                         else:
                             st.error(result["message"])
-        
+
         with tab_register:
             with st.form("register_form"):
-                reg_email = st.text_input("Email", placeholder="you@example.com", key="reg_email")
-                reg_password = st.text_input("Password", type="password", key="reg_pass")
-                reg_confirm = st.text_input("Confirm Password", type="password", key="reg_confirm")
-                reg_submitted = st.form_submit_button("Create Account", use_container_width=True)
-                
+                reg_email = st.text_input(
+                    "Email", placeholder="you@example.com", key="reg_email"
+                )
+                reg_password = st.text_input(
+                    "Password", type="password", key="reg_pass"
+                )
+                reg_confirm = st.text_input(
+                    "Confirm Password", type="password", key="reg_confirm"
+                )
+                reg_submitted = st.form_submit_button(
+                    "Create Account", use_container_width=True
+                )
+
                 if reg_submitted:
                     if not reg_email or not reg_password:
                         st.error("Please fill in all fields.")
-                    elif '@' not in reg_email or '.' not in reg_email.split('@')[-1]:
+                    elif "@" not in reg_email or "." not in reg_email.split("@")[-1]:
                         st.error("Please enter a valid email address.")
                     elif reg_password != reg_confirm:
                         st.error("Passwords don't match.")
@@ -344,25 +370,28 @@ if not st.session_state.authenticated:
                             st.success(result["message"])
                         else:
                             st.error(result["message"])
-        
+
         # Connection status
         st.markdown("---")
         if client.health_check():
             st.success("● Backend Online")
         else:
             st.error("● Backend Offline — run `python main.py`")
-    
+
     st.stop()
 
 # --- Authenticated App ---
 # --- Sidebar ---
 with st.sidebar:
     st.markdown("### ✨ Property Guardian")
-    
+
     # Status Badge
     is_online = client.health_check()
     status_class = "" if is_online else "offline"
-    st.markdown(f'<div class="status-badge {status_class}">{"● System Online" if is_online else "○ System Offline"}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="status-badge {status_class}">{"● System Online" if is_online else "○ System Offline"}</div>',
+        unsafe_allow_html=True,
+    )
 
     st.write("")
     # Enhanced New Chat Button
@@ -370,53 +399,66 @@ with st.sidebar:
     if st.button("＋ Start New Chat", use_container_width=True):
         st.session_state.messages = []
         import uuid
+
         st.session_state.chat_session_id = str(uuid.uuid4())
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
     st.markdown("---")
-    
+
     # Tool Categories with Cards
     st.markdown("##### 📁 DATA MANAGEMENT")
     with st.container():
         st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
         st.markdown("**Document Ingestion**")
         st.caption("Upload and index legal property deeds for analysis.")
-        
-        uploaded_files = st.file_uploader("Add PDF files", accept_multiple_files=True, type="pdf", label_visibility="collapsed")
+
+        uploaded_files = st.file_uploader(
+            "Add PDF files",
+            accept_multiple_files=True,
+            type="pdf",
+            label_visibility="collapsed",
+        )
         if uploaded_files:
             if st.button("Process & Index", type="primary", use_container_width=True):
-                 with st.spinner("Analyzing chain of title..."):
+                with st.spinner("Analyzing chain of title..."):
                     resp = client.ingest_files(uploaded_files)
                     if resp.get("message"):
                         st.toast(f"Success: {resp['message']}", icon="✨")
                     else:
                         st.error("Processing failed.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        
+        st.markdown("</div>", unsafe_allow_html=True)
+
     st.write("")
     st.markdown("##### 🛡️ SECURITY TOOLS")
     with st.container():
         st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
         st.markdown("**Fraud Analytics**")
         st.caption("Check for suspicious title transfers or ownership red flags.")
-        
+
         if st.button("🚀 Run Analysis", use_container_width=True):
             with st.status("Performing deep security audit...") as status:
                 anomalies = client.check_fraud()
                 status.update(label="Audit Complete", state="complete")
-                
+
                 if anomalies:
                     msg = f"**⚠️ Fraud Alert**: Found {len(anomalies)} potential anomalies.\n"
                     for a in anomalies:
                         # Use badge styling for risk levels
                         msg += f"- `{a.get('location')}` : **High Risk** ({a.get('reason')})\n"
-                    st.session_state.messages.append({"role": "assistant", "content": msg})
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": msg}
+                    )
                 else:
-                     st.session_state.messages.append({"role": "assistant", "content": "✅ **System Secure**: No suspicious transaction patterns detected in the indexed records."})
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": "✅ **System Secure**: No suspicious transaction patterns detected in the indexed records.",
+                        }
+                    )
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
     st.markdown("##### 🛠️ DEVELOPER TOOLS")
@@ -424,19 +466,26 @@ with st.sidebar:
         st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
         st.markdown("**SQL Explorer**")
         st.caption("Execute raw SELECT queries for manual auditing.")
-        
-        sql_input = st.text_area("Enter SQL Query", height=100, label_visibility="collapsed", placeholder="SELECT * FROM properties LIMIT 5;")
+
+        sql_input = st.text_area(
+            "Enter SQL Query",
+            height=100,
+            label_visibility="collapsed",
+            placeholder="SELECT * FROM properties LIMIT 5;",
+        )
         if st.button("🔍 Run Query", use_container_width=True):
             if sql_input:
                 with st.spinner("Executing query..."):
                     results = client.execute_sql(sql_input)
                     if isinstance(results, list):
                         if results:
-                            st.session_state.messages.append({
-                                "role": "assistant", 
-                                "content": f"📊 **SQL Results**:\nFound {len(results)} rows.",
-                                "df": pd.DataFrame(results)
-                            })
+                            st.session_state.messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": f"📊 **SQL Results**:\nFound {len(results)} rows.",
+                                    "df": pd.DataFrame(results),
+                                }
+                            )
                             st.toast(f"Query returned {len(results)} rows.", icon="📊")
                         else:
                             st.info("Query returned no results.")
@@ -444,7 +493,7 @@ with st.sidebar:
                         st.error(f"SQL Error: {results.get('message')}")
             else:
                 st.warning("Please enter a query.")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
     if st.button("🚪 Logout Session", use_container_width=True, type="secondary"):
@@ -464,10 +513,16 @@ with st.sidebar:
 
 if len(st.session_state.messages) == 0:
     import html as html_module
-    raw_name = st.session_state.user_email.split('@')[0].capitalize() if st.session_state.user_email else "User"
+
+    raw_name = (
+        st.session_state.user_email.split("@")[0].capitalize()
+        if st.session_state.user_email
+        else "User"
+    )
     display_name = html_module.escape(raw_name)
-    
-    st.markdown(f"""
+
+    st.markdown(
+        f"""
         <div style="background: white; border: 1px solid #E5E2DC; border-radius: 24px; padding: 3rem 2rem; text-align: center; margin: 2rem 0; box-shadow: 0 10px 40px rgba(0,0,0,0.03);">
             <h1 style="font-family: 'Georgia', serif; font-style: italic; font-weight: 500; color: #1f1d1d; font-size: 2.8rem; margin-bottom: 1rem;">
                 Welcome, {display_name}
@@ -476,25 +531,31 @@ if len(st.session_state.messages) == 0:
                 Your Property Guardian AI is ready. Upload documents, run deep-chain fraud analytics, or simply start a conversation about your property risk.
             </p>
         </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Quick start CTAs
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown('<div class="sidebar-card" style="height: 100%;">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="sidebar-card" style="height: 100%;">', unsafe_allow_html=True
+        )
         st.markdown("📂 **Upload Deed**")
         st.caption("Ingest and index property documents.")
         if st.button("Get Started", key="cta_upload", use_container_width=True):
             st.toast("Use the sidebar 'Data Management' card to upload PDF files.")
         st.markdown("</div>", unsafe_allow_html=True)
     with c2:
-        st.markdown('<div class="sidebar-card" style="height: 100%;">', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="sidebar-card" style="height: 100%;">', unsafe_allow_html=True
+        )
         st.markdown("💬 **Consult AI**")
         st.caption("Ask anything about property regulations.")
         if st.button("Chat Now", key="cta_chat", use_container_width=True):
             st.toast("Type your question in the box below!")
         st.markdown("</div>", unsafe_allow_html=True)
-    
+
     st.write("")
     st.write("")
 
@@ -502,35 +563,50 @@ if len(st.session_state.messages) == 0:
 for msg in st.session_state.messages:
     if msg["role"] == "system":
         continue
-    
+
     avatar = "👤" if msg["role"] == "user" else "✨"
     with st.chat_message(msg["role"], avatar=avatar):
         if msg["role"] == "assistant":
             # Apply AI specialized card styling
-            st.markdown(f'<div class="msg-ai">{msg["content"]}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="msg-ai">{msg["content"]}</div>', unsafe_allow_html=True
+            )
             if "df" in msg:
                 st.dataframe(msg["df"], use_container_width=True)
             if "sources" in msg and msg["sources"]:
                 with st.expander("View Chain of Title sources"):
                     for s in msg["sources"]:
-                        st.markdown(f"📍 **{s.get('property', 'N/A')}**\n- Transaction: {s.get('seller', 'Unknown')} → {s.get('buyer', 'Unknown')}")
+                        st.markdown(
+                            f"📍 **{s.get('property', 'N/A')}**\n- Transaction: {s.get('seller', 'Unknown')} → {s.get('buyer', 'Unknown')}"
+                        )
         else:
             # Apply user bubble styling
-            st.markdown(f'<div class="msg-user">{msg["content"]}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="msg-user">{msg["content"]}</div>', unsafe_allow_html=True
+            )
 
 # --- Chat Input Pill ---
 
 # Prompt Suggestions (Helper Chips)
 if len(st.session_state.messages) > 0:
-    st.markdown("""
+    st.markdown(
+        """
         <div style="display: flex; gap: 8px; margin-top: 1rem; margin-bottom: 4px; justify-content: center;">
             <span class="status-badge" style="font-size: 10px; cursor: pointer;">"Show latest transfers"</span>
             <span class="status-badge" style="font-size: 10px; cursor: pointer;">"Check fraud status"</span>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
 # STT Feature
-spoken_text = speech_to_text(language='en', start_prompt="Talk to Guardian", stop_prompt="Stop Listening", just_once=True, key='stt_input')
+spoken_text = speech_to_text(
+    language="en",
+    start_prompt="Talk to Guardian",
+    stop_prompt="Stop Listening",
+    just_once=True,
+    key="stt_input",
+)
 
 # Chat Input
 typed_prompt = st.chat_input("Ask Property Guardian...")
@@ -539,24 +615,33 @@ prompt = spoken_text if spoken_text else typed_prompt
 if prompt:
     # 1. Append User Message
     st.session_state.messages.append({"role": "user", "content": prompt})
-    
+
     # 2. Get AI Response
     with st.chat_message("assistant", avatar="✨"):
         message_placeholder = st.empty()
         with st.spinner("Analyzing property records..."):
             try:
-                response = client.chat(prompt, session_id=st.session_state.chat_session_id)
-                
+                response = client.chat(
+                    prompt, session_id=st.session_state.chat_session_id
+                )
+
                 # Handle different response formats
                 if isinstance(response, str):
                     answer = response
                 elif isinstance(response, dict):
-                    answer = response.get("answer", response.get("output", response.get("message", str(response))))
+                    answer = response.get(
+                        "answer",
+                        response.get("output", response.get("message", str(response))),
+                    )
                 else:
                     answer = str(response)
-                
-                message_placeholder.markdown(f'<div class="msg-ai">{answer}</div>', unsafe_allow_html=True)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+
+                message_placeholder.markdown(
+                    f'<div class="msg-ai">{answer}</div>', unsafe_allow_html=True
+                )
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": answer}
+                )
                 st.rerun()
             except Exception as e:
                 st.error(f"Interaction Error: {str(e)}")

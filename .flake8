@@ -1,0 +1,4 @@
+[flake8]
+exclude = .git,__pycache__,.venv,venv,build,dist,tests/manual,alembic/versions,generate_test_pdfs.py,init_db.py
+max-line-length = 88
+extend-ignore = E203,E501,W291,W293,E402,F401,E722,F841,F811,F541

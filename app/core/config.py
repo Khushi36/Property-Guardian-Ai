@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Property Fraud Detection System"
@@ -12,7 +14,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://openrouter.ai/api/v1"
     LLM_MODEL: str = "arcee-ai/trinity-large-preview:free"
     REDIS_URL: Optional[str] = None
-    
+
     # Email Settings for OTP
     SMTP_SERVER: str = ""
     SMTP_PORT: int = 587
@@ -24,8 +26,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    ALLOWED_ORIGINS: str = '["http://localhost:8501", "http://localhost:8000"]' # JSON string format
+    ALLOWED_ORIGINS: str = (
+        '["http://localhost:8501", "http://localhost:8000"]'  # JSON string format
+    )
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
 
 settings = Settings()
