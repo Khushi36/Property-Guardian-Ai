@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Guardian AI: System Workflow</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --background: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #0f172a;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-sub);
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .mermaid-container {
+            display: flex;
+            justify-content: center;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .highlights {
+            margin-top: 40px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .highlight-card {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .highlight-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+
+        .highlight-card p {
+            font-size: 14px;
+            margin: 0;
+            line-height: 1.5;
+            color: var(--text-sub);
+        }
+
+        #download-btn {
+            display: none; /* Just a placeholder if needed later */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Property Guardian AI: System Workflow</h1>
+        <p class="subtitle">Detailed architectural flow for document ingestion, fraud detection, and user interaction.</p>
+        
+        <div class="mermaid-container">
+            <div class="mermaid">
+graph TD
+    subgraph Ingestion ["1. Document Ingestion Phase"]
+        A[Upload PDF] --> B{Text Extraction}
+        B -->|Success| C[Raw Text]
+        B -->|Failure/Photo| D[Tesseract OCR]
+        D --> C
+        C --> E[Regex/LLM Extraction]
+        E --> F[Structured Metadata]
+        F --> G[(Postgres DB)]
+        C --> H[(ChromaDB Vector Store)]
+    end
+
+    subgraph Security ["2. Fraud Detection Phase"]
+        G --> I[SQL Window Functions]
+        I --> J{Pattern Match}
+        J -->|Current Seller != Prev Buyer| K[Flags: Broken Chain]
+        J -->|Sale Count > 1| L[Flags: Double Selling]
+        K & L --> M[Risk Assessment Report]
+    end
+
+    subgraph Interaction ["3. User Interaction Phase"]
+        N[User Query] --> O{Query Type}
+        O -->|Natural Language| P[RAG: ChromaDB Search]
+        O -->|Direct Question| Q[LLM SQL Generation]
+        P & Q --> R[LLM Synthesis]
+        R --> S[AI Assistant Response]
+        M -.-> S
+    end
+
+    style K fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    style L fill:#fef2f2,stroke:#ef4444,stroke-width:2px
+    style M fill:#fecaca,stroke:#dc2626,stroke-width:2px
+    
+    %% Colors for subgraphs
+    style Ingestion fill:#f0f9ff,stroke:#0ea5e9
+    style Security fill:#fff1f2,stroke:#f43f5e
+    style Interaction fill:#f0fdf4,stroke:#22c55e
+            </div>
+        </div>
+
+        <div class="highlights">
+            <div class="highlight-card">
+                <h3>1. Ingestion</h3>
+                <p>Supports digital and photo-based PDFs via OCR for comprehensive data extraction.</p>
+            </div>
+            <div class="highlight-card">
+                <h3>2. Security</h3>
+                <p>Automated ownership tracking ensures title integrity and detects fraud patterns.</p>
+            </div>
+            <div class="highlight-card">
+                <h3>3. Interaction</h3>
+                <p>Hybrid Vector Search and Text-to-SQL for accurate query synthesis.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            fontFamily: 'Inter',
+            themeVariables: {
+                primaryColor: '#3b82f6',
+                primaryTextColor: '#1e293b',
+                primaryBorderColor: '#2563eb',
+                lineColor: '#64748b',
+                secondaryColor: '#f1f5f9',
+                tertiaryColor: '#ffffff'
+            }
+        });
+    </script>
+</body>
+</html>
