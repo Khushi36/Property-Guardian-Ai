@@ -23,72 +23,185 @@ Property Guardian AI is an advanced, AI-powered system designed to secure proper
 
 ## 📋 Prerequisites
 
-- Python 3.9+
-- PostgreSQL 14+
-- LLM API Key (e.g., [OpenRouter](https://openrouter.ai/))
+Before you begin, make sure you have the following installed on your machine:
 
-## ⚙️ Setup & Installation
+| Requirement | Version | Check Command |
+|---|---|---|
+| **Python** | 3.11+ | `python --version` |
+| **PostgreSQL** | 14+ | `psql --version` |
+| **pip** | Latest | `pip --version` |
+| **Git** | Any | `git --version` |
 
-### 1. Clone the Repository
+You will also need a free **LLM API Key** from [OpenRouter](https://openrouter.ai/) (sign up → Dashboard → API Keys → Create Key).
+
+---
+
+## ⚙️ Setup & Installation (Step-by-Step)
+
+### Step 1 — Clone the Repository
+
 ```bash
-git clone https://github.com/Khushi36/property-guardian-ai.git
-cd property-guardian-ai
+git clone https://github.com/Khushi36/Property-Guardian-Ai.git
+cd Property-Guardian-Ai
 ```
 
-### 2. Configure Environment
+### Step 2 — Create a Virtual Environment (Recommended)
 
-1. Copy the example environment file to create your own configuration:
-   ```bash
-   cp .env.example .env
-   ```
-   *(On Windows Command Prompt, use `copy .env.example .env` or rename the file manually)*
+```bash
+# Create the virtual environment
+python -m venv .venv
 
-2. Open the `.env` file and configure your variables. 
-   
-   **Important: Generating a `SECRET_KEY`**
-   The application requires a secure random string for the `SECRET_KEY` to sign login tokens safely. Generate one by running this command in your terminal:
-   ```bash
-   python -c "import secrets; print(secrets.token_hex(32))"
-   ```
-   Copy the output and paste it into your `.env` file next to `SECRET_KEY=`.
+# Activate it
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
 
-Example `.env` configuration:
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/property_db
-OPENROUTER_API_KEY=your_openrouter_key_here
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_MODEL=arcee-ai/trinity-large-preview:free
-SECRET_KEY=paste_your_generated_random_string_here
+# On Windows (CMD):
+.venv\Scripts\activate.bat
+
+# On macOS/Linux:
+source .venv/bin/activate
 ```
 
-### 3. Install Dependencies
+You should see `(.venv)` at the beginning of your terminal prompt after activation.
+
+### Step 3 — Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Initialize Database
+> ⏳ This may take 2–5 minutes on the first run as it downloads all packages.
+
+### Step 4 — Set Up PostgreSQL Database
+
+Make sure PostgreSQL is running, then create the database:
+
+```bash
+# Open the PostgreSQL shell
+psql -U postgres
+
+# Inside the psql shell, run:
+CREATE DATABASE property_db;
+\q
+```
+
+> 💡 Replace `postgres` with your PostgreSQL username if different.
+
+### Step 5 — Configure the `.env` File
+
+1. **Copy the example file:**
+   ```bash
+   # Windows:
+   copy .env.example .env
+
+   # macOS/Linux:
+   cp .env.example .env
+   ```
+
+2. **Generate a SECRET_KEY:**
+   ```bash
+   python -c "import secrets; print(secrets.token_hex(32))"
+   ```
+   Copy the output string.
+
+3. **Edit the `.env` file** with your values:
+   ```env
+   DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/property_db
+   SECRET_KEY=paste_your_generated_hex_string_here
+   OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxx
+   LLM_BASE_URL=https://openrouter.ai/api/v1
+   LLM_MODEL=arcee-ai/trinity-large-preview:free
+   ```
+
+> ⚠️ **Important:** `SECRET_KEY` and `DATABASE_URL` are **required**. The app will not start without them.
+
+### Step 6 — Initialize the Database Tables
+
 ```bash
 python init_db.py
 ```
 
+**Expected output:**
+```
+Starting database initialization...
+SUCCESS: Database tables created at localhost:5432/property_db
+```
+
+---
+
 ## 🏃 Running the Application
 
-### Option 1: Manual Start
+You need **two terminal windows** — one for the backend and one for the frontend.
 
-**Start the Backend:**
+### Terminal 1 — Start the Backend API
+
 ```bash
 python main.py
 ```
 
-**Start the Frontend:**
+**Expected output:**
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to stop)
+```
+
+Verify by visiting: **http://localhost:8000/health**
+
+### Terminal 2 — Start the Frontend UI
+
+Open a **new terminal**, activate the venv again, then run:
+
 ```bash
+# Activate venv (if not active)
+.venv\Scripts\Activate.ps1    # Windows
+source .venv/bin/activate      # macOS/Linux
+
+# Start the frontend
 streamlit run streamlit_app.py
 ```
 
-### Option 2: Docker Compose (Recommended)
+**Expected output:**
+```
+Local URL: http://localhost:8501
+```
+
+### Open the App
+
+Open your browser and go to: **http://localhost:8501**
+
+### Default User Credentials
+
+| Email | Password |
+|---|---|
+| `admin@example.com` | `password` |
+| `user@example.com` | `password` |
+
+---
+
+## 🐳 Running with Docker (Alternative)
+
 ```bash
 docker-compose up --build
 ```
 
+---
+
+## 🛑 Stopping the Application
+
+Press `Ctrl + C` in each terminal window to stop the backend and frontend.
+
+---
+
+## 🔧 Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| `SECRET_KEY Field required` error | Create a `.env` file with a valid `SECRET_KEY` (see Step 5) |
+| `psycopg2` connection refused | Ensure PostgreSQL is running (`pg_isready` to check) |
+| `ModuleNotFoundError` | Activate your venv and run `pip install -r requirements.txt` |
+| Port 8000/8501 already in use | Kill the process using that port or change the port |
+
+---
+
 ## 📜 License
-This project is licensed under the MIT License - see the LICENSE file for details.
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
