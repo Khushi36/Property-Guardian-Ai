@@ -134,7 +134,8 @@ def test_protected_endpoint_with_token():
 
 
 # --- Direct SQL Endpoint Removed ---
-def test_direct_sql_removed():
-    """Verify /query/direct_sql no longer exists."""
-    response = client.post("/api/v1/query/direct_sql", json="SELECT 1")
-    assert response.status_code in (404, 405)  # Route should not exist
+def test_direct_sql_requires_auth():
+    """Verify /query/direct_sql requires authentication."""
+    response = client.post("/api/v1/query/direct_sql", json={"query": "SELECT 1"})
+    assert response.status_code == 401  # Requires auth
+

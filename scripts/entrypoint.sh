@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Start FastAPI in the background
 echo "Starting FastAPI backend..."

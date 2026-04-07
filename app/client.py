@@ -199,3 +199,48 @@ class PropertyGuardianClient:
                 except:
                     pass
             return {"status": "error", "message": detail}
+
+    def sync_neo4j(self):
+        """Trigger syncing of Postgres data into Neo4j graph database."""
+        if not self.is_authenticated:
+            return {"status": "error", "message": "Not authenticated."}
+        try:
+            resp = requests.post(
+                f"{self.api_v1}/graph/sync",
+                headers=self.headers,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_graph_chain(self, property_id: int):
+        """Fetch chain of title for a property from Neo4j."""
+        if not self.is_authenticated:
+            return {"chain": [], "count": 0}
+        try:
+            resp = requests.get(
+                f"{self.api_v1}/graph/chain/{property_id}",
+                headers=self.headers,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as e:
+            return {"chain": [], "count": 0, "error": str(e)}
+
+    def get_graph_network(self):
+        """Fetch the full property transaction network from Neo4j."""
+        if not self.is_authenticated:
+            return {"nodes": [], "edges": []}
+        try:
+            resp = requests.get(
+                f"{self.api_v1}/graph/network",
+                headers=self.headers,
+                timeout=60,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as e:
+            return {"nodes": [], "edges": [], "error": str(e)}

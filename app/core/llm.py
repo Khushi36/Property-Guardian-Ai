@@ -47,19 +47,7 @@ class LLMClient:
         # For simple text extraction, 4k-8k is usually plenty for the header info.
         truncated_text = ""
         if text:
-            # Iterative truncation to avoid slicing issues
-            limit_val = 16000
-            if len(text) > limit_val:
-                trunc_chars: List[str] = []
-                c_idx = 0
-                for c in text:
-                    if c_idx >= limit_val:
-                        break
-                    trunc_chars.append(str(c))
-                    c_idx += 1
-                truncated_text = "".join(trunc_chars)
-            else:
-                truncated_text = text
+            truncated_text = text[:16000]
         prompt = f"""
         Analyze the following document text and extract property details.
         
@@ -141,9 +129,14 @@ class LLMClient:
         prompt = f"""
         Analyze the following property search query and extract search parameters.
         Return ONLY a JSON object with keys:
-        village, plot_no, district, seller_name, buyer_name.
-        If a parameter is not mentioned, exclude it or set to null.
-        NOTE: "plot_no" should include "Plot", "Survey", "Gat", "Gut", "Khewat", or "Khatauni" numbers.
+        - "village" (string)
+        - "plot_no" (string, including "Plot", "Survey", "Gat", "Gut", "Khewat", or "Khatauni" numbers)
+        - "district" (string)
+        - "seller_name" (string)
+        - "buyer_name" (string)
+        - "is_graph_query" (boolean): Set to true if the user is asking about the "history", "chain of title", "previous owners", "who owned", "transaction timeline", "charts", "networks", "connections", or "relationships" between entities.
+        
+        If a parameter is not mentioned, exclude it or set to null. If not a graph query, default `is_graph_query` to false. For queries about total counts (e.g. "how many properties") or simple lists, set this to false.
         
         Query: "{nl_query}"
         """
@@ -213,9 +206,6 @@ class LLMClient:
 
         messages.append({"role": "user", "content": question})
 
-        client = self.client
-        if not client:
-            return "AI model is not configured.", None
 
         try:
             completion = client.chat.completions.create(

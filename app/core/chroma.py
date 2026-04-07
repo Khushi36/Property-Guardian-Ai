@@ -40,13 +40,23 @@ class CustomOpenAIEmbeddingFunction(EmbeddingFunction):
 
 
 def get_chroma_client():
-    if not os.path.exists(settings.CHROMA_PERSIST_DIRECTORY):
-        os.makedirs(settings.CHROMA_PERSIST_DIRECTORY)
-    return chromadb.PersistentClient(path=settings.CHROMA_PERSIST_DIRECTORY)
-
+    from chromadb.config import Settings
+    try:
+        # Use HttpClient to connect to Chroma via settings
+        return chromadb.HttpClient(
+            host=settings.CHROMA_HOST,
+            port=settings.CHROMA_PORT,
+            settings=Settings(anonymized_telemetry=False)
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize Chroma HttpClient: {e}")
+        return None
 
 def get_property_collection():
     client = get_chroma_client()
+    if not client:
+        logger.error("Chroma client is not available. Returning None for collection.")
+        return None
 
     # Determine the best embedding model based on the LLM provider
     embedding_model = "text-embedding-ada-002"
@@ -60,6 +70,10 @@ def get_property_collection():
         api_key=api_key, base_url=settings.LLM_BASE_URL, model_name=embedding_model
     )
 
-    return client.get_or_create_collection(
-        name="property_documents", embedding_function=ef
-    )
+    try:
+        return client.get_or_create_collection(
+            name="property_documents", embedding_function=ef
+        )
+    except Exception as e:
+        logger.error(f"Failed to get or create Chroma collection: {e}")
+        return None

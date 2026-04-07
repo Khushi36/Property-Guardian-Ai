@@ -1,5 +1,6 @@
 import logging
 import time
+import re
 from collections import defaultdict
 
 from fastapi import (APIRouter, Depends, File, HTTPException, Query, Request,
@@ -21,6 +22,7 @@ from app.core.limiter import limiter
 from app.models import schemas, sql_models
 from app.services import (fraud_detection, ingestion, query_service,
                           sync_service)
+from app.services import neo4j_service
 
 router = APIRouter()
 
@@ -199,10 +201,12 @@ def ingest_document(
         if res.get("status") == "error":
             errors.append(f"{file.filename}: {res['message']}")
         elif res.get("status") == "skipped":
-            results.append(f"{file.filename} (Skipped: {res['message']})")
+            prop_id = res.get("property_id", "unknown")
+            results.append(f"{file.filename} (Skipped — Property ID: {prop_id})")
         else:
             p_no = res.get("extracted_data", {}).get("plot_no", "unknown")
-            results.append(f"{file.filename} (Plot: {p_no})")
+            prop_id = res.get("property_id", "unknown")
+            results.append(f"{file.filename} (Property ID: {prop_id}, Plot: {p_no})")
 
     if not results and errors:
         raise HTTPException(
@@ -268,8 +272,12 @@ def query_direct_sql(
         "GRANT",
         "REVOKE",
     ]
+    import re
+    # Remove inline comments (e.g. /* ... */ or -- ...) that could hide keywords
+    query_clean = re.sub(r'(--[^\n]*)|(/\*.*?\*/)', '', query_upper, flags=re.DOTALL)
+    
     for cmd in forbidden:
-        if cmd in query_upper:
+        if re.search(rf"\b{cmd}\b", query_clean):
             raise HTTPException(
                 status_code=400,
                 detail=f"Operation '{cmd}' is NOT allowed. Only SELECT queries are permitted.",
@@ -367,3 +375,34 @@ def sync_data(
     current_user: sql_models.User = Depends(get_current_active_user),
 ):
     return sync_service.sync_postgres_to_chroma(db)
+
+
+# --- Neo4j Graph Endpoints ---
+
+@router.post("/graph/sync")
+def graph_sync(
+    db: Session = Depends(get_db),
+    current_user: sql_models.User = Depends(get_current_active_user),
+):
+    """Sync all Postgres data to Neo4j graph database."""
+    return sync_service.sync_postgres_to_neo4j(db)
+
+
+@router.get("/graph/chain/{property_id}")
+def graph_chain(
+    property_id: int,
+    current_user: sql_models.User = Depends(get_current_active_user),
+):
+    """Return the full chain of title for a specific property from Neo4j."""
+    records = neo4j_service.get_ownership_chain(property_id)
+    return {"property_id": property_id, "chain": records, "count": len(records)}
+
+
+@router.get("/graph/network")
+def graph_network(
+    limit: int = Query(default=200, le=1000),
+    current_user: sql_models.User = Depends(get_current_active_user),
+):
+    """Return the full person-property-transaction network from Neo4j."""
+    network = neo4j_service.get_full_network(limit=limit)
+    return network

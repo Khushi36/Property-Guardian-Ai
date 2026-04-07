@@ -4,6 +4,7 @@ import extra_streamlit_components as stx
 import pandas as pd
 import streamlit as st
 from streamlit_mic_recorder import speech_to_text
+from streamlit_agraph import agraph, Node, Edge, Config
 
 from app.client import PropertyGuardianClient
 
@@ -284,6 +285,12 @@ if "chat_session_id" not in st.session_state:
     import uuid
 
     st.session_state.chat_session_id = str(uuid.uuid4())
+if "graph_mode" not in st.session_state:
+    st.session_state.graph_mode = None   # None | "chain" | "network"
+if "graph_data_panel" not in st.session_state:
+    st.session_state.graph_data_panel = None
+if "graph_title" not in st.session_state:
+    st.session_state.graph_title = ""
 
 # --- Cookie Check (Survival across refresh) ---
 if not st.session_state.authenticated:
@@ -425,7 +432,50 @@ with st.sidebar:
                 with st.spinner("Analyzing chain of title..."):
                     resp = client.ingest_files(uploaded_files)
                     if resp.get("message"):
-                        st.toast(f"Success: {resp['message']}", icon="✨")
+                        msg = resp["message"]
+                        st.toast(f"Success: {msg}", icon="✨")
+
+                        # Extract property IDs from the response message
+                        # Format: "file.pdf (Property ID: 3, Plot: 45)"
+                        import re as _re
+                        prop_ids = _re.findall(r"Property ID:\s*(\d+)", msg)
+
+                        if prop_ids:
+                            first_pid = int(prop_ids[0])
+                            # Auto-sync to Neo4j so the graph is fresh
+                            with st.spinner(f"Syncing Property {first_pid} to Neo4j graph..."):
+                                client.sync_neo4j()
+                            # Auto-load chain of title for the first ingested property
+                            data = client.get_graph_chain(first_pid)
+                            chain = data.get("chain", [])
+                            if chain:
+                                st.session_state.graph_mode = "chain"
+                                st.session_state.graph_data_panel = chain
+                                st.session_state.graph_title = f"Chain of Title — Property {first_pid}"
+                                # Also add a helpful chat message
+                                ids_str = ", ".join(prop_ids)
+                                st.session_state.messages.append({
+                                    "role": "assistant",
+                                    "content": (
+                                        f"✅ **Document ingested successfully!**\n\n"
+                                        f"**Property ID(s):** `{ids_str}`\n\n"
+                                        f"The graph below shows the chain of title for **Property {first_pid}**. "
+                                        f"You can also search for this ID anytime in the **Graph Explorer** panel on the sidebar."
+                                    ),
+                                })
+                                st.rerun()
+                            else:
+                                # Graph data not available yet — still show the IDs
+                                ids_str = ", ".join(prop_ids)
+                                st.session_state.messages.append({
+                                    "role": "assistant",
+                                    "content": (
+                                        f"✅ **Document ingested successfully!**\n\n"
+                                        f"**Property ID(s):** `{ids_str}`\n\n"
+                                        f"Use these IDs in the **Graph Explorer** → **Chain of Title** to view the ownership graph."
+                                    ),
+                                })
+                                st.rerun()
                     else:
                         st.error("Processing failed.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -496,12 +546,67 @@ with st.sidebar:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
+    st.markdown("##### 🕸️ GRAPH EXPLORER")
+    with st.container():
+        st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
+        st.markdown("**Neo4j Visualization**")
+        st.caption("Explore ownership chains and transaction networks.")
+
+        # Sync button
+        if st.button("🔄 Sync to Neo4j", use_container_width=True):
+            with st.spinner("Syncing data to Neo4j..."):
+                result = client.sync_neo4j()
+                if result.get("status") in ("completed", "success"):
+                    n = result.get("nodes_created", 0)
+                    r = result.get("rels_created", 0)
+                    st.toast(f"✅ Synced! {n} nodes, {r} relationships", icon="🕸️")
+                else:
+                    st.error(result.get("message", "Sync failed. Is Neo4j running?"))
+
+        st.write("")
+
+        # Chain of Title by Property ID
+        graph_pid = st.number_input(
+            "Property ID",
+            min_value=1,
+            step=1,
+            value=1,
+            label_visibility="collapsed",
+        )
+        if st.button("🔗 Chain of Title", use_container_width=True):
+            with st.spinner(f"Fetching graph for property {graph_pid}..."):
+                data = client.get_graph_chain(int(graph_pid))
+                chain = data.get("chain", [])
+                if chain:
+                    st.session_state.graph_mode = "chain"
+                    st.session_state.graph_data_panel = chain
+                    st.session_state.graph_title = f"Chain of Title — Property {graph_pid}"
+                    st.rerun()
+                else:
+                    st.warning(f"No graph data found for Property {graph_pid}. Try syncing first.")
+
+        st.write("")
+
+        # Full Network
+        if st.button("🌐 Full Network", use_container_width=True):
+            with st.spinner("Loading full transaction network..."):
+                network = client.get_graph_network()
+                if network.get("nodes"):
+                    st.session_state.graph_mode = "network"
+                    st.session_state.graph_data_panel = network
+                    st.session_state.graph_title = f"Full Transaction Network — {len(network['nodes'])} nodes"
+                    st.rerun()
+                else:
+                    st.warning("No network data found. Try syncing to Neo4j first.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
     if st.button("🚪 Logout Session", use_container_width=True, type="secondary"):
         st.session_state.authenticated = False
         st.session_state.user_email = ""
         st.session_state.messages = []
-        cookie_manager.delete("property_guardian_token")
-        cookie_manager.delete("property_guardian_email")
+        cookie_manager.delete("property_guardian_session")
         if "client" in st.session_state:
             del st.session_state.client
         st.rerun()
@@ -509,7 +614,183 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Property Guardian AI v4.0")
 
+
+# --- Shared graph-rendering helper ---
+def render_graph(graph_records, mode="chain", height=500):
+    """
+    Render an agraph from either:
+    - chain mode: list of {seller, buyer, date, txn_id, plot, village}
+    - network mode: {nodes: [...], edges: [...]}
+    Returns (nodes_count, edges_count).
+    """
+    COLOR_MAP = {
+        "seller": "#D97757",      # Coral — sellers
+        "buyer": "#1E90FF",       # Dodger blue — buyers
+        "property": "#1dd49a",    # Emerald — properties
+        "transaction": "#f4b545", # Amber — transactions
+        "document": "#a855f7",    # Purple — documents
+    }
+    AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+    PROP_ICON = "https://cdn-icons-png.flaticon.com/512/602/602175.png"
+    TXN_ICON = "https://cdn-icons-png.flaticon.com/512/2921/2921222.png"
+    DOC_ICON = "https://cdn-icons-png.flaticon.com/512/2956/2956744.png"
+
+    nodes_list = []
+    edges_list = []
+    nodes_set = set()
+
+    def add_node(nid, label, ntype, metadata=None):
+        if nid not in nodes_set:
+            color = COLOR_MAP.get(ntype, "#888")
+            icon = AVATAR if ntype in ("seller", "buyer") else (
+                PROP_ICON if ntype == "property" else (DOC_ICON if ntype == "document" else TXN_ICON)
+            )
+            
+            # Enrich title with metadata for tooltips
+            title = f"{ntype.capitalize()}: {label}"
+            if metadata:
+                if metadata.get("pan") and metadata["pan"] != "N/A":
+                    title += f"\nPAN: {metadata['pan']}"
+                if metadata.get("aadhaar") and metadata["aadhaar"] != "N/A":
+                    title += f"\nAadhaar: {metadata['aadhaar']}"
+
+            nodes_list.append(
+                Node(
+                    id=str(nid),
+                    label=str(label),
+                    title=title,
+                    size=28 if ntype in ("seller", "buyer") else 22,
+                    shape="circularImage",
+                    image=icon,
+                    color=color,
+                    font={"color": "#1f1d1d", "size": 11, "face": "Plus Jakarta Sans"},
+                    borderWidth=2,
+                    borderWidthSelected=4,
+                )
+            )
+            nodes_set.add(nid)
+
+    if mode == "chain" and isinstance(graph_records, list):
+        for rec in graph_records:
+            seller = rec.get("seller") or "Unknown Seller"
+            buyer = rec.get("buyer") or "Unknown Buyer"
+            date = rec.get("date", "") or "N/A"
+            txn_id = rec.get("txn_id", "unknown")
+            village = rec.get("village", "") or "Unknown"
+            plot = rec.get("plot", "") or "N/A"
+
+            # Use STABLE IDs from backend if possible
+            s_key = f"person_{rec.get('seller_id')}" if rec.get("seller_id") else f"person_s_{seller}"
+            b_key = f"person_{rec.get('buyer_id')}" if rec.get("buyer_id") else f"person_b_{buyer}"
+            t_key = f"txn_{txn_id}"
+            p_key = f"prop_{rec.get('prop_id')}" if rec.get("prop_id") else f"prop_{village}_{plot}"
+
+            add_node(s_key, seller, "seller", metadata={"pan": rec.get("seller_pan"), "aadhaar": rec.get("seller_aadhaar")})
+            add_node(b_key, buyer, "buyer", metadata={"pan": rec.get("buyer_pan"), "aadhaar": rec.get("buyer_aadhaar")})
+            add_node(t_key, f"Sale\n{str(date)[:10]}", "transaction")
+            
+            p_label = f"Plot {plot}\n{village}"
+            add_node(p_key, p_label, "property")
+
+            edges_list.append(Edge(source=s_key, target=t_key, label="SOLD", color="#D97757", width=2, type="CURVE_SMOOTH"))
+            edges_list.append(Edge(source=t_key, target=b_key, label="BOUGHT", color="#1E90FF", width=2, type="CURVE_SMOOTH"))
+            edges_list.append(Edge(source=t_key, target=p_key, label="FOR", color="#1dd49a", width=1, dashes=True, type="CURVE_SMOOTH"))
+
+            if rec.get("doc_id") is not None:
+                d_key = f"doc_{rec['doc_id']}"
+                filename = rec["doc_path"].split("/")[-1].split("\\")[-1] if rec.get("doc_path") else f"Doc {rec['doc_id']}"
+                add_node(d_key, filename, "document")
+                edges_list.append(Edge(source=t_key, target=d_key, label="BASED_ON", color="#a855f7", width=1, type="CURVE_SMOOTH"))
+
+    elif mode == "network" and isinstance(graph_records, dict):
+        for n in graph_records.get("nodes", []):
+            add_node(n["id"], n["label"], n["type"], metadata=n)
+        for e in graph_records.get("edges", []):
+            edge_color = "#D97757" if e["label"] == "SOLD" else (
+                "#1E90FF" if e["label"] == "BOUGHT_BY" else (
+                    "#1dd49a" if e["label"] == "FOR_PROPERTY" else (
+                        "#ef4444" if e["label"] == "CROSS_MATCH_WITH" else "#a855f7"
+                    )
+                )
+            )
+            dashes = True if e["label"] == "CROSS_MATCH_WITH" else False
+            edges_list.append(Edge(
+                source=e["source"],
+                target=e["target"],
+                label=e["label"],
+                color=edge_color,
+                width=3 if e["label"] == "CROSS_MATCH_WITH" else 2,
+                type="CURVE_SMOOTH",
+                dashes=dashes,
+            ))
+
+    config = Config(
+        width="100%",
+        height=height,
+        directed=True,
+        nodeHighlightBehavior=True,
+        highlightColor="#D97757",
+        collapsible=False,
+        physics={"enabled": True, "stabilization": {"iterations": 150}},
+        link={"highlightColor": "#D97757", "renderLabel": True},
+    )
+
+    if nodes_list and edges_list:
+        agraph(nodes=nodes_list, edges=edges_list, config=config)
+        return len(nodes_list), len(edges_list)
+    elif nodes_list:
+        agraph(nodes=nodes_list, edges=[], config=config)
+        return len(nodes_list), 0
+    return 0, 0
+
 # --- Main Chat Interface ---
+
+# ── Graph Explorer Panel (full-width, rendered before chat) ──────────────
+if st.session_state.graph_mode and st.session_state.graph_data_panel is not None:
+    gdata = st.session_state.graph_data_panel
+
+    st.markdown(
+        f"""
+        <div style="background: linear-gradient(135deg, #f6f3ec, #ffffff);
+                    border: 1px solid #E5E2DC; border-radius: 20px;
+                    padding: 1.5rem 1.75rem; margin-bottom: 1.5rem;
+                    box-shadow: 0 8px 30px rgba(0,0,0,0.04);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.75rem;">
+            <h3 style="margin:0; font-size:1.1rem; color:#1f1d1d;">🕸️ {st.session_state.graph_title}</h3>
+            <div style="display:flex; gap: 10px;">
+              <span style="background:#fff3ef; color:#D97757; border:1px solid rgba(217,119,87,0.2); border-radius:20px; padding:3px 10px; font-size:0.72rem; font-weight:600;">● Sellers</span>
+              <span style="background:#eff6ff; color:#1E90FF; border:1px solid rgba(30,144,255,0.2); border-radius:20px; padding:3px 10px; font-size:0.72rem; font-weight:600;">● Buyers</span>
+              <span style="background:#eefdf5; color:#1dd49a; border:1px solid rgba(29,212,154,0.2); border-radius:20px; padding:3px 10px; font-size:0.72rem; font-weight:600;">● Properties</span>
+              <span style="background:#fffbef; color:#f4b545; border:1px solid rgba(244,181,69,0.2); border-radius:20px; padding:3px 10px; font-size:0.72rem; font-weight:600;">● Transactions</span>
+              <span style="background:#f3e8ff; color:#a855f7; border:1px solid rgba(168,85,247,0.2); border-radius:20px; padding:3px 10px; font-size:0.72rem; font-weight:600;">● Documents</span>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    mode = st.session_state.graph_mode
+    n_count, e_count = render_graph(gdata, mode=mode, height=550)
+
+    # Stats bar + clear button
+    col_stat1, col_stat2, col_stat3, col_clear = st.columns([1, 1, 1, 1])
+    with col_stat1:
+        st.metric("Nodes", n_count)
+    with col_stat2:
+        st.metric("Edges", e_count)
+    with col_stat3:
+        depth = len(gdata) if isinstance(gdata, list) else len(gdata.get("edges", []))
+        st.metric("Records", depth)
+    with col_clear:
+        if st.button("✖ Close Graph", use_container_width=True):
+            st.session_state.graph_mode = None
+            st.session_state.graph_data_panel = None
+            st.session_state.graph_title = ""
+            st.rerun()
+
+    st.markdown("---")
+
 
 if len(st.session_state.messages) == 0:
     import html as html_module
@@ -567,12 +848,20 @@ for msg in st.session_state.messages:
     avatar = "👤" if msg["role"] == "user" else "✨"
     with st.chat_message(msg["role"], avatar=avatar):
         if msg["role"] == "assistant":
-            # Apply AI specialized card styling
-            st.markdown(
-                f'<div class="msg-ai">{msg["content"]}</div>', unsafe_allow_html=True
-            )
+            st.markdown(msg["content"])
             if "df" in msg:
-                st.dataframe(msg["df"], use_container_width=True)
+                df = pd.DataFrame(msg["df"])
+                if msg.get("chart_type") == "bar" and not df.empty:
+                    st.write("📊 **Anomaly Distribution by Village**")
+                    # Simple bar chart logic: count anomalies by location if possible
+                    chart_data = df.groupby("Location").size().reset_index(name="Count")
+                    st.bar_chart(chart_data, x="Location", y="Count")
+                else:
+                    st.dataframe(df, use_container_width=True)
+            if "graph_data" in msg and msg["graph_data"]:
+                st.write("🕸️ **Property Chain of Title**")
+                render_graph(msg["graph_data"], mode="chain", height=400)
+
             if "sources" in msg and msg["sources"]:
                 with st.expander("View Chain of Title sources"):
                     for s in msg["sources"]:
@@ -580,10 +869,7 @@ for msg in st.session_state.messages:
                             f"📍 **{s.get('property', 'N/A')}**\n- Transaction: {s.get('seller', 'Unknown')} → {s.get('buyer', 'Unknown')}"
                         )
         else:
-            # Apply user bubble styling
-            st.markdown(
-                f'<div class="msg-user">{msg["content"]}</div>', unsafe_allow_html=True
-            )
+            st.markdown(msg["content"])
 
 # --- Chat Input Pill ---
 
@@ -636,12 +922,18 @@ if prompt:
                 else:
                     answer = str(response)
 
-                message_placeholder.markdown(
-                    f'<div class="msg-ai">{answer}</div>', unsafe_allow_html=True
-                )
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": answer}
-                )
+                message_placeholder.markdown(answer)
+                # Store response with data if available
+                msg_obj = {"role": "assistant", "content": answer}
+                if isinstance(response, dict):
+                    if "df" in response:
+                        msg_obj["df"] = response["df"]
+                    if "chart_type" in response:
+                        msg_obj["chart_type"] = response["chart_type"]
+                    if "graph_data" in response:
+                        msg_obj["graph_data"] = response["graph_data"]
+                
+                st.session_state.messages.append(msg_obj)
                 st.rerun()
             except Exception as e:
                 st.error(f"Interaction Error: {str(e)}")

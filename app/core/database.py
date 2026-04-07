@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
@@ -13,11 +13,9 @@ engine = create_engine(
     pool_pre_ping=True,
 )
 
-# Implementation of read-only engine
-from sqlalchemy import make_url
-
+# Read-only engine (credentials from environment variables)
 readonly_url = make_url(settings.DATABASE_URL).set(
-    username="read_only_user", password="readonly_password"
+    username=settings.READONLY_DB_USER, password=settings.READONLY_DB_PASSWORD
 )
 readonly_engine = create_engine(
     readonly_url,

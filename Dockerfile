@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -8,6 +8,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    tesseract-ocr \
+    libtesseract-dev \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container at /app
@@ -28,4 +31,4 @@ COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Run the entrypoint script
-CMD ["/entrypoint.sh"]
+CMD ["sh", "/entrypoint.sh"]

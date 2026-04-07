@@ -33,8 +33,13 @@ def add_message(
         content=content,
         reasoning_details=reasoning_details,
     )
-    db.add(msg)
-    db.commit()
+    try:
+        db.add(msg)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.error(f"Failed to save chat message: {e}")
 
 
 def get_history(db: Session, session_id: str, limit: int = 10):

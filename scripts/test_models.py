@@ -33,7 +33,7 @@ def test_model(model_id):
         response = requests.post(
             base_url, headers=headers, data=json.dumps(data), timeout=15
         )
-        if response.status_status == 200:
+        if response.status_code == 200:
             print(f"SUCCESS: {response.json()['choices'][0]['message']['content']}")
             return True
         else:

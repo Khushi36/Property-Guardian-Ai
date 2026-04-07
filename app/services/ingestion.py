@@ -16,6 +16,7 @@ from app.core.chroma import get_property_collection
 from app.core.config import settings
 from app.core.llm import llm_client
 from app.models import sql_models
+from app.services.neo4j_service import get_driver
 
 logger = logging.getLogger(__name__)
 
@@ -121,15 +122,7 @@ def extract_metadata(file_path: str) -> dict:
                 and isinstance(prefix, str)
                 and val.lower().startswith(prefix.lower())
             ):
-                # Avoid slicing: val = val[len(prefix):].strip()
-                prefix_len = len(prefix)
-                clean_chars: List[str] = []
-                v_idx = 0
-                for v_char in val:
-                    if v_idx >= prefix_len:
-                        clean_chars.append(str(v_char))
-                    v_idx += 1
-                val = "".join(clean_chars).strip()
+                val = val[len(prefix):].strip()
 
         # One more pass to be safe
         for prefix in ["Name:", "Name :"]:
@@ -138,26 +131,11 @@ def extract_metadata(file_path: str) -> dict:
                 and isinstance(prefix, str)
                 and val.lower().startswith(prefix.lower())
             ):
-                # Avoid slicing
-                prefix_len = len(prefix)
-                clean_chars: List[str] = []
-                v_idx = 0
-                for v_char in val:
-                    if v_idx >= prefix_len:
-                        clean_chars.append(str(v_char))
-                    v_idx += 1
-                val = "".join(clean_chars).strip()
+                val = val[len(prefix):].strip()
 
         # Truncate if it captured too much table noise
         if isinstance(val, str) and len(val) > 200:
-            tr_chars: List[str] = []
-            tr_cnt = 0
-            for tr_c in val:
-                if tr_cnt >= 200:
-                    break
-                tr_chars.append(str(tr_c))
-                tr_cnt += 1
-            val = "".join(tr_chars)
+            val = val[:200]
 
         return val.title() if val != "Unknown" else "Unknown"
 
@@ -198,23 +176,9 @@ def extract_metadata(file_path: str) -> dict:
         if k != "text_content" and isinstance(v, str) and v != "Unknown":
             v_lower = v.lower()
             if v_lower.startswith("of "):
-                # Avoid slicing v[3:]
-                off_chars: List[str] = []
-                off_idx_val = 0
-                for oc in v:
-                    if off_idx_val >= 3:
-                        off_chars.append(str(oc))
-                    off_idx_val += 1
-                extracted[k] = "".join(off_chars).strip()
+                extracted[k] = v[3:].strip()
             elif v_lower.startswith("the "):
-                # Avoid slicing v[4:]
-                the_chars: List[str] = []
-                the_idx_val = 0
-                for tc in v:
-                    if the_idx_val >= 4:
-                        the_chars.append(str(tc))
-                    the_idx_val += 1
-                extracted[k] = "".join(the_chars).strip()
+                extracted[k] = v[4:].strip()
 
     # DECISION: When to call LLM?
     # 1. Critical fields are "Unknown"
@@ -273,10 +237,14 @@ def process_document(file, db: Session):
             )
 
         if existing_doc:
+            txn = db.query(sql_models.Transaction).filter_by(document_id=existing_doc.id).first()
+            p_id = txn.property_id if txn else "Unknown"
+            
             return {
                 "status": "skipped",
                 "message": "Document already exists or same filename was uploaded.",
                 "document_id": existing_doc.id,
+                "property_id": p_id
             }
 
         # Sanitize filename to prevent path traversal attacks (e.g., "../../etc/passwd")
@@ -330,20 +298,21 @@ def process_document(file, db: Session):
             if text_content and text_content.strip():
                 try:
                     collection = get_property_collection()
-                    chroma_id = f"doc_{file_hash}"
-                    metadata = {
-                        "document_id": new_doc.id,
-                        "property_id": -1,
-                        "district": extracted.get("district", "Unknown"),
-                        "village": extracted.get("village", "Unknown"),
-                        "plot_no": extracted.get("plot_no", "Unknown"),
-                        "seller": extracted.get("seller_name", "Unknown"),
-                        "buyer": extracted.get("buyer_name", "Unknown"),
-                        "partial_ingestion": "true",
-                    }
-                    collection.upsert(
-                        documents=[text_content], metadatas=[metadata], ids=[chroma_id]
-                    )
+                    if collection:
+                        chroma_id = f"doc_{file_hash}"
+                        metadata = {
+                            "document_id": new_doc.id,
+                            "property_id": -1,
+                            "district": extracted.get("district", "Unknown"),
+                            "village": extracted.get("village", "Unknown"),
+                            "plot_no": extracted.get("plot_no", "Unknown"),
+                            "seller": extracted.get("seller_name", "Unknown"),
+                            "buyer": extracted.get("buyer_name", "Unknown"),
+                            "partial_ingestion": "true",
+                        }
+                        collection.upsert(
+                            documents=[text_content], metadatas=[metadata], ids=[chroma_id]
+                        )
                 except Exception as chroma_err:
                     logger.error(f"ChromaDB partial storage failed: {chroma_err}")
 
@@ -514,26 +483,60 @@ def process_document(file, db: Session):
         # 4. Store in ChromaDB (Do this BEFORE final commit)
         if text_content and text_content.strip():
             collection = get_property_collection()
-            chroma_id = f"doc_{file_hash}"
+            if collection:
+                chroma_id = f"doc_{file_hash}"
 
-            metadata = {
-                "document_id": new_doc.id,
-                "property_id": prop.id,
-                "district": extracted["district"],
-                "village": extracted["village"],
-                "plot_no": extracted["plot_no"],
-                "seller": seller.name,
-                "buyer": buyer.name,
-            }
+                metadata = {
+                    "document_id": new_doc.id,
+                    "property_id": prop.id,
+                    "district": extracted["district"],
+                    "village": extracted["village"],
+                    "plot_no": extracted["plot_no"],
+                    "seller": seller.name,
+                    "buyer": buyer.name,
+                }
 
-            collection.upsert(
-                documents=[text_content], metadatas=[metadata], ids=[chroma_id]
-            )
+                collection.upsert(
+                    documents=[text_content], metadatas=[metadata], ids=[chroma_id]
+                )
         else:
             raise ValueError("No text content extracted from document.")
 
         # 5. Final Commit
         db.commit()
+
+        # 6. Store in Neo4j Graph
+        try:
+            driver = get_driver()
+            if driver:
+                with driver.session() as session:
+                    # Merge Seller and Buyer
+                    session.run(
+                        "MERGE (s:Person {id: $seller_id}) SET s.name=$seller_name, s.pan=$seller_pan, s.aadhaar=$seller_aadhaar "
+                        "MERGE (b:Person {id: $buyer_id}) SET b.name=$buyer_name, b.pan=$buyer_pan, b.aadhaar=$buyer_aadhaar",
+                        seller_id=seller.id, seller_name=seller.name, seller_pan=seller.pan_number or "N/A", seller_aadhaar=seller.aadhaar_number or "N/A",
+                        buyer_id=buyer.id, buyer_name=buyer.name, buyer_pan=buyer.pan_number or "N/A", buyer_aadhaar=buyer.aadhaar_number or "N/A"
+                    )
+                    # Merge Property
+                    session.run(
+                        "MERGE (p:Property {id: $prop_id}) SET p.state=$state, p.district=$district, p.village=$village, p.plot_no=$plot",
+                        prop_id=prop.id, state=prop.state or "", district=prop.district or "", village=prop.village or "", plot=prop.plot_no or ""
+                    )
+                    # Merge Transaction and Relationships
+                    session.run(
+                        "MERGE (t:Transaction {id: $t_id}) SET t.date=$date, t.document_id=$doc_id "
+                        "WITH t "
+                        "MATCH (s:Person {id: $seller_id}), (b:Person {id: $buyer_id}), (p:Property {id: $prop_id}) "
+                        "MERGE (s)-[:SOLD]->(t) "
+                        "MERGE (t)-[:BOUGHT_BY]->(b) "
+                        "MERGE (t)-[:FOR_PROPERTY]->(p)",
+                        t_id=transaction.id, date=str(transaction.registration_date) if transaction.registration_date else "", doc_id=new_doc.id,
+                        seller_id=seller.id, buyer_id=buyer.id, prop_id=prop.id
+                    )
+                logger.info("Successfully synced Neo4j Graph for ingested document.")
+        except Exception as graph_e:
+            logger.error(f"Failed to sync Neo4j Graph: {graph_e}")
+
 
     except Exception as e:
         logger.error(f"Error processing document: {e}", exc_info=True)
